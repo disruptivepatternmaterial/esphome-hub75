@@ -13,6 +13,31 @@ namespace esphome
     void HUB75Display::setup() {
       ESP_LOGCONFIG(TAG, "Setting up HUB75Display...");
 
+      // Validate configuration
+      if (this->width_ < 16 || this->width_ > 256) {
+        ESP_LOGE(TAG, "Invalid width: %d (must be 16-256)", this->width_);
+        this->mark_failed();
+        return;
+      }
+      
+      if (this->height_ < 16 || this->height_ > 256) {
+        ESP_LOGE(TAG, "Invalid height: %d (must be 16-256)", this->height_);
+        this->mark_failed();
+        return;
+      }
+      
+      // Check memory availability
+      size_t required_memory = this->width_ * this->height_ * 3; // RGB
+      if (ESP.getFreeHeap() < required_memory + 10000) { // 10KB buffer
+        ESP_LOGE(TAG, "Insufficient memory: %d bytes free, %d required", 
+                 ESP.getFreeHeap(), required_memory);
+        this->mark_failed();
+        return;
+      }
+
+      ESP_LOGCONFIG(TAG, "Memory check passed: %d bytes free, %d required", 
+                   ESP.getFreeHeap(), required_memory);
+
       // Module configuration
       HUB75_I2S_CFG mxconfig(
           this->width_,
@@ -62,7 +87,15 @@ namespace esphome
 
     void HUB75Display::update() {
       unsigned long timeMillis = millis();
+      
+      // Frame rate limiting to prevent excessive updates
+      if (timeMillis - this->last_update_time_ < this->min_update_interval_) {
+        return; // Skip update if too soon
+      }
+      this->last_update_time_ = timeMillis;
+      
       this->update_brightness_(timeMillis);
+      this->update_fps_monitoring_(timeMillis);
     }
 
     void HUB75Display::dump_config() {
@@ -153,8 +186,14 @@ namespace esphome
       if (x >= this->get_width_internal() || x < 0 || y >= this->get_height_internal() || y < 0)
         return;
 
+      // Apply gamma correction only if enabled
+      uint8_t r = color.r, g = color.g, b = color.b;
+      if (this->enable_gamma_correction_) {
+        this->apply_gamma_correction(r, g, b);
+      }
+
       // Update pixel value in buffer
-      this->dma_display_->drawPixelRGB888(x, y, color.r, color.g, color.b);
+      this->dma_display_->drawPixelRGB888(x, y, r, g, b);
     }
 
     void HUB75Display::fill(Color color) {
@@ -198,27 +237,16 @@ namespace esphome
     }
 
     void HUB75Display::update_brightness_(unsigned long timeInMillis) {
-      frameCounter_++;
-      if ((timeInMillis - frameTime_) >= 1000) {
-        ESP_LOGD(TAG, "%d frames per second!", frameCounter_);
-
-        frameTime_ = timeInMillis;
-        frameCounter_ = 0;
-      }
-
       if (timeInMillis - _lastTime >= brightness_fade_speed_) {
-        // Do the morph logic if required.
+        // Optimized brightness transition logic
         if (brightness_ != brightness_destination_) {
-          // 0 -> 255 256/20
           if (brightness_destination_ > brightness_) {
             if (brightness_ + 2 > brightness_destination_ || brightness_ + 2 > 255) {
               brightness_ = brightness_destination_;
             } else {
               brightness_ = brightness_ + 2;
             }
-          }
-
-          if (brightness_destination_ < brightness_) {
+          } else if (brightness_destination_ < brightness_) {
             if (brightness_ < 2 || brightness_ - 2 < brightness_destination_) {
               brightness_ = brightness_destination_;
             } else {
@@ -233,6 +261,51 @@ namespace esphome
 
         _lastTime = timeInMillis;
       }
+    }
+
+    void HUB75Display::update_fps_monitoring_(unsigned long timeInMillis) {
+      if (!this->enable_fps_monitoring_) {
+        return;
+      }
+
+      this->frame_count_++;
+      
+      if ((timeInMillis - this->last_fps_time_) >= 1000) {
+        this->current_fps_ = (float)this->frame_count_ * 1000.0f / (timeInMillis - this->last_fps_time_);
+        
+        if (this->frame_count_ % 10 == 0) { // Log every 10 seconds
+          ESP_LOGD(TAG, "FPS: %.1f, Frame count: %d, Free heap: %d bytes", 
+                   this->current_fps_, this->frame_count_, ESP.getFreeHeap());
+        }
+
+        this->last_fps_time_ = timeInMillis;
+        this->frame_count_ = 0;
+      }
+    }
+
+    void HUB75Display::apply_gamma_correction(uint8_t& r, uint8_t& g, uint8_t& b) {
+      static const uint8_t gamma_table[256] = {
+        0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+        0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
+        1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
+        2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
+        5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
+       10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
+       17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
+       25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
+       37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
+       51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
+       69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
+       90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
+      115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
+      144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
+      177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
+      215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255
+      };
+      
+      r = gamma_table[r];
+      g = gamma_table[g];
+      b = gamma_table[b];
     }
 
   }  // namespace hub75_base

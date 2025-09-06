@@ -43,6 +43,10 @@ CONF_CHAIN_LENGTH = 'chain_length'
 CONF_I2SSPEED = 'i2sspeed'
 CONF_LATCH_BLANKING = 'latch_blanking'
 CONF_CLOCK_PHASE = 'clock_phase'
+CONF_DOUBLE_BUFFER = 'double_buffer'
+CONF_ENABLE_FPS_MONITORING = 'enable_fps_monitoring'
+CONF_ENABLE_GAMMA_CORRECTION = 'enable_gamma_correction'
+CONF_MIN_UPDATE_INTERVAL = 'min_update_interval'
 
 hub75_base_ns = cg.esphome_ns.namespace("hub75_base")
 HUB75Display = hub75_base_ns.class_(
@@ -70,15 +74,21 @@ HUB75_SCHEMA = (
     display.FULL_DISPLAY_SCHEMA.extend(
         {
             cv.GenerateID(): cv.declare_id(HUB75Display),
-            cv.Optional(CONF_WIDTH, default=64): cv.positive_int,
-            cv.Optional(CONF_HEIGHT, default=32): cv.positive_int,
-            cv.Optional(CONF_CHAIN_LENGTH, default=1): cv.positive_int,
+            cv.Optional(CONF_WIDTH, default=64): cv.int_range(min=16, max=256),
+            cv.Optional(CONF_HEIGHT, default=32): cv.int_range(min=16, max=256),
+            cv.Optional(CONF_CHAIN_LENGTH, default=1): cv.int_range(min=1, max=8),
             cv.Optional(CONF_BRIGHTNESS, default=100): cv.int_range(min=0, max=255),
             cv.Optional(CONF_MIN_BRIGHTNESS, default=0): cv.uint8_t,
             cv.Optional(CONF_MAX_BRIGHTNESS, default=255): cv.uint8_t,
             cv.Optional(
                 CONF_UPDATE_INTERVAL, default="16ms"
             ): cv.positive_time_period_milliseconds,
+            
+            # Performance tuning options
+            cv.Optional(CONF_DOUBLE_BUFFER, default=True): cv.boolean,
+            cv.Optional(CONF_ENABLE_FPS_MONITORING, default=False): cv.boolean,
+            cv.Optional(CONF_ENABLE_GAMMA_CORRECTION, default=False): cv.boolean,
+            cv.Optional(CONF_MIN_UPDATE_INTERVAL, default="16ms"): cv.positive_time_period_milliseconds,
 
             cv.Optional(CONF_PIN_R1, default=25): pins.gpio_output_pin_schema,
             cv.Optional(CONF_PIN_G1, default=26): pins.gpio_output_pin_schema,
@@ -166,6 +176,19 @@ async def setup_hub75_display(var, config):
 
     if CONF_CLOCK_PHASE in config:
         cg.add(var.set_clock_phase(config[CONF_CLOCK_PHASE]))
+
+    # Performance tuning options
+    if CONF_DOUBLE_BUFFER in config:
+        cg.add(var.set_double_buffer(config[CONF_DOUBLE_BUFFER]))
+    
+    if CONF_ENABLE_FPS_MONITORING in config:
+        cg.add(var.set_enable_fps_monitoring(config[CONF_ENABLE_FPS_MONITORING]))
+    
+    if CONF_ENABLE_GAMMA_CORRECTION in config:
+        cg.add(var.set_enable_gamma_correction(config[CONF_ENABLE_GAMMA_CORRECTION]))
+    
+    if CONF_MIN_UPDATE_INTERVAL in config:
+        cg.add(var.set_min_update_interval(config[CONF_MIN_UPDATE_INTERVAL].total_milliseconds))
 
     if cv.Version.parse(ESPHOME_VERSION) < cv.Version.parse("2023.12.0"):
         await cg.register_component(var, config)

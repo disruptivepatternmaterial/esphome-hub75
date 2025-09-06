@@ -1,0 +1,155 @@
+substitutions:
+  esphome_name: hub75_optimized
+
+# Add own developed components to search path of esphome
+external_components:
+  - source: components
+
+esphome:
+  name: ${esphome_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+  # Performance optimizations
+  cpu_frequency: 240MHz  # Maximum CPU frequency for better performance
+    
+wifi:
+  ssid: !secret esphome_wifi_ssid
+  password: !secret esphome_wifi_pass
+
+logger:
+  level: DEBUG
+
+api:
+  reboot_timeout: 60min
+  encryption:
+    key: !secret esphome_api_key
+
+ota:
+  password: !secret esphome_ota_pass
+
+sensor:
+  - platform: uptime
+    name: "${esphome_name}_Uptime Sensor"
+    
+  - platform: wifi_signal
+    name: "${esphome_name} WiFi Signal"
+    update_interval: 60s
+
+## OPTIMIZED HUB75 DISPLAY CONFIGURATION
+
+# Display needs accurate time to show clock
+time:
+  - platform: homeassistant
+    timezone: Europe/Zurich
+    id: esptime
+
+# Define assets we need for using on the display
+font:
+  # https://github.com/apparentlymart/ledpixels/blob/master/tom-thumb.bdf
+  - file: "fonts/tom-thumb.bdf"
+    id: tomthumb
+
+color:
+  - id: red
+    red: 100%
+
+# OPTIMIZED Display configuration with performance tuning
+display:
+  platform: hub75_default
+  id: my_trinity_display
+  auto_clear_enabled: false  # Disable auto-clear for better performance
+  
+  # Display dimensions
+  width: 64
+  height: 32
+  chain_length: 1
+  
+  # Brightness settings
+  brightness: 200
+  min_brightness: 10
+  max_brightness: 255
+  
+  # Performance optimizations
+  update_interval: 16ms  # 60 FPS for smooth animation
+  i2sspeed: HZ_20M  # Higher clock speed for better performance
+  latch_blanking: 1  # Reduce blanking for smoother display
+  clock_phase: false  # Optimize clock phase
+  double_buffer: true  # Enable double buffering for smoother updates
+  
+  # Performance monitoring
+  enable_fps_monitoring: true  # Enable FPS monitoring for debugging
+  min_update_interval: 16ms  # Prevent excessive updates
+  
+  # Pin configuration (Trinity ESP32 defaults)
+  pin_r1: 25
+  pin_g1: 26
+  pin_b1: 27
+  pin_r2: 14
+  pin_g2: 12
+  pin_b2: 13
+  pin_a: 23
+  pin_b: 19
+  pin_c: 5
+  pin_d: 17
+  pin_e: -1  # Not used on Trinity
+  pin_latch: 4
+  pin_oe: 15
+  pin_clk: 16
+  
+  # Color order
+  rgb_order: "RGB"
+  
+  # Driver configuration
+  chipset: SHIFTREG
+  
+  # Lambda function for optimized display content
+  lambda: |-
+    // Clear screen for smooth updates
+    it.filled_rectangle(0, 0, 64, 32, COLOR_OFF);
+    
+    // Draw optimized clock with better positioning
+    it.strftime(32, 8, id(tomthumb), id(red), TextAlign::TOP_CENTER, "%H:%M:%S", id(esptime).now());
+    
+    // Draw performance info (only if FPS monitoring is enabled)
+    if (id(my_trinity_display).get_fps() > 0) {
+      it.printf(2, 24, id(tomthumb), id(red), TextAlign::TOP_LEFT, "%.1f FPS", id(my_trinity_display).get_fps());
+    }
+    
+    // Draw memory usage
+    it.printf(32, 24, id(tomthumb), id(red), TextAlign::TOP_CENTER, "%d KB", ESP.getFreeHeap() / 1024);
+
+# Performance monitoring sensors
+sensor:
+  - platform: template
+    name: "Display FPS"
+    id: display_fps
+    update_interval: 1s
+    lambda: |-
+      return id(my_trinity_display).get_fps();
+    unit_of_measurement: "fps"
+    accuracy_decimals: 1
+    
+  - platform: template
+    name: "Display Frame Count"
+    id: display_frame_count
+    update_interval: 1s
+    lambda: |-
+      return id(my_trinity_display).get_frame_count();
+    unit_of_measurement: "frames"
+
+# Performance monitoring text sensors
+text_sensor:
+  - platform: template
+    name: "Display Performance"
+    id: display_performance
+    update_interval: 5s
+    lambda: |-
+      char buffer[64];
+      snprintf(buffer, sizeof(buffer), "FPS: %.1f, Frames: %d, Heap: %d KB", 
+               id(my_trinity_display).get_fps(), 
+               id(my_trinity_display).get_frame_count(),
+               ESP.getFreeHeap() / 1024);
+      return std::string(buffer);
