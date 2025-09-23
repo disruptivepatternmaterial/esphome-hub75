@@ -27,6 +27,10 @@ namespace esphome {
       HUB75Display::update();
 
       if (this->enabled_) {
+        if (this->auto_clear_enabled_) {
+          this->clear_efficient();
+        }
+
         if (this->page_ != nullptr) {
           this->page_->get_writer()(*this);
         } else if (this->writer_.has_value()) {
