@@ -95,20 +95,7 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
       this->clock_phase_ = clock_phase;
     }
 
-    void set_double_buffer(bool double_buffer) { this->double_buffer_enabled_ = double_buffer; }
-    void set_min_update_interval(uint32_t min_interval) { this->min_update_interval_ = min_interval; }
-    void set_enable_fps_monitoring(bool enable) { this->enable_fps_monitoring_ = enable; }
-    void set_enable_gamma_correction(bool enable) { this->enable_gamma_correction_ = enable; }
-    void force_update() { this->last_update_time_ = 0; } // Force next update
-
     display::DisplayType get_display_type() override { return display::DisplayType::DISPLAY_TYPE_COLOR; }
-    
-    // Performance monitoring
-    float get_fps() { return this->current_fps_; }
-    uint32_t get_frame_count() { return this->frame_count_; }
-    
-    // Color correction
-    void apply_gamma_correction(uint8_t& r, uint8_t& g, uint8_t& b);
 
     // START: override methods from base class Display to use native performant functions of HUB75 DMA display
     void fill(Color color) override;
@@ -158,21 +145,11 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
     uint16_t height_{32};
     bool double_buffer_enabled_{true};
 
-    // Performance monitoring and optimization
-    unsigned long last_update_time_ = 0;
-    uint32_t min_update_interval_ = 16; // 60 FPS max by default
-    bool enable_fps_monitoring_ = false;
-    bool enable_gamma_correction_ = false; // Disabled by default
-    uint32_t frame_count_ = 0;
-    uint32_t last_fps_time_ = 0;
-    float current_fps_ = 0.0f;
-
     int get_width_internal() override { return width_; };
     int get_height_internal() override { return height_; };
     virtual void update_();
     virtual void start_screen_();
     void update_brightness_(unsigned long timeInMillis);
-    void update_fps_monitoring_(unsigned long timeInMillis);
 
     uint8_t get_brightness() { return brightness_; };
 
