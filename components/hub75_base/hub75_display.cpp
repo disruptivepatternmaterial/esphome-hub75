@@ -2,7 +2,6 @@
 using namespace esphome;
 #include "hub75_display.h"
 #include <Fonts/TomThumb.h>
-#include <algorithm>
 
 namespace esphome
 {
@@ -10,13 +9,6 @@ namespace esphome
   {
 
     static const char *const TAG = "hub75_base";
-
-    HUB75Display::~HUB75Display() {
-      if (this->dma_display_ != nullptr) {
-        delete this->dma_display_;
-        this->dma_display_ = nullptr;
-      }
-    }
 
     void HUB75Display::setup() {
       ESP_LOGCONFIG(TAG, "Setting up HUB75Display...");
@@ -68,12 +60,8 @@ namespace esphome
       // The min refresh rate correlates with the update frequency of the component
       mxconfig.min_refresh_rate = 1000 / this->update_interval_;
 
-      // Enable double buffering for flicker reduction
+      //TODO: How to use double buffering properly?
       mxconfig.double_buff = this->double_buffer_enabled_;
-      
-      // Additional flicker reduction settings
-      mxconfig.clkphase = true;  // Always enable clock phase
-      mxconfig.latch_blanking = 12;  // Higher blanking for flicker reduction
 
       // Display Setup
       this->dma_display_ = new MatrixPanel_I2S_DMA(mxconfig);
@@ -101,9 +89,7 @@ namespace esphome
       unsigned long timeMillis = millis();
       
       // Frame rate limiting to prevent excessive updates
-      uint32_t effective_interval = this->min_update_interval_;
-        
-      if (timeMillis - this->last_update_time_ < effective_interval) {
+      if (timeMillis - this->last_update_time_ < this->min_update_interval_) {
         return; // Skip update if too soon
       }
       this->last_update_time_ = timeMillis;
@@ -123,7 +109,7 @@ namespace esphome
       // Log pin settings
       ESP_LOGCONFIG(TAG, "  Pins: R1:%i, G1:%i, B1:%i, R2:%i, G2:%i, B2:%i", pins_.r1, pins_.g1, pins_.b1, pins_.r2, pins_.g2, pins_.b2);
       ESP_LOGCONFIG(TAG, "  Pins: A:%i, B:%i, C:%i, D:%i, E:%i", pins_.a, pins_.b, pins_.c, pins_.d, pins_.e);
-      ESP_LOGCONFIG(TAG, "  Pins: LAT:%i, OE:%i, CLK:%i", pins_.lat, pins_.oe, pins_.clk);
+      ESP_LOGCONFIG(TAG, "  Pins: LAT:%i, OE:%i, CLK:%i", pins_.lat, pins_.oe, pins_.b1, pins_.clk);
 
       LOG_UPDATE_INTERVAL(this);
 
@@ -254,15 +240,18 @@ namespace esphome
       if (timeInMillis - _lastTime >= brightness_fade_speed_) {
         // Optimized brightness transition logic
         if (brightness_ != brightness_destination_) {
-          int8_t step = (brightness_destination_ > brightness_) ? brightness_step_size_ : -brightness_step_size_;
-          int16_t new_brightness = brightness_ + step;
-          
-          // Clamp to destination or bounds
-          if ((step > 0 && new_brightness >= brightness_destination_) ||
-              (step < 0 && new_brightness <= brightness_destination_)) {
-            brightness_ = brightness_destination_;
-          } else {
-            brightness_ = (uint8_t)std::max(0, std::min(255, (int)new_brightness));
+          if (brightness_destination_ > brightness_) {
+            if (brightness_ + 2 > brightness_destination_ || brightness_ + 2 > 255) {
+              brightness_ = brightness_destination_;
+            } else {
+              brightness_ = brightness_ + 2;
+            }
+          } else if (brightness_destination_ < brightness_) {
+            if (brightness_ < 2 || brightness_ - 2 < brightness_destination_) {
+              brightness_ = brightness_destination_;
+            } else {
+              brightness_ = brightness_ - 2;
+            }
           }
 
           uint8_t brightness_destination_saved = brightness_destination_;
@@ -294,30 +283,29 @@ namespace esphome
       }
     }
 
-    // Move gamma table to class scope for better performance
-    const uint8_t HUB75Display::GAMMA_TABLE[256] = {
-      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-      0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
-      1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
-      2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
-      5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
-     10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
-     17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
-     25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
-     37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
-     51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
-     69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
-     90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
-    115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
-    144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
-    177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
-    215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255
-    };
-
     void HUB75Display::apply_gamma_correction(uint8_t& r, uint8_t& g, uint8_t& b) {
-      r = GAMMA_TABLE[r];
-      g = GAMMA_TABLE[g];
-      b = GAMMA_TABLE[b];
+      static const uint8_t gamma_table[256] = {
+        0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+        0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
+        1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
+        2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
+        5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
+       10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
+       17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
+       25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
+       37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
+       51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
+       69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
+       90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
+      115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
+      144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
+      177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
+      215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255
+      };
+      
+      r = gamma_table[r];
+      g = gamma_table[g];
+      b = gamma_table[b];
     }
 
   }  // namespace hub75_base
