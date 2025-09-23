@@ -49,6 +49,7 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
     virtual void setup();
     virtual void update();
     virtual void dump_config();
+    virtual ~HUB75Display();
 
     void set_panel_height(int panel_height) { this->height_ = panel_height; }
     void set_panel_width(int panel_width) { this->width_ = panel_width; }
@@ -109,10 +110,19 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
     
     // Color correction
     void apply_gamma_correction(uint8_t& r, uint8_t& g, uint8_t& b);
+    static const uint8_t GAMMA_TABLE[256];
 
     // START: override methods from base class Display to use native performant functions of HUB75 DMA display
     void fill(Color color) override;
     void clear() { this->dma_display_->clearScreen(); };
+    void clear_efficient() { 
+      // More efficient clear that reduces flicker
+      if (this->dma_display_ != nullptr) {
+        this->dma_display_->clearScreen();
+        // Small delay to ensure clear is complete before next frame
+        delayMicroseconds(100);
+      }
+    };
     void filled_rectangle(int x1, int y1, int width, int height, Color color = display::COLOR_ON);
     void draw_pixel_at(int x, int y, Color color) override;
     // END: override methods from base class Display to use native performant functions of HUB75 DMA display
@@ -151,7 +161,8 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
     uint8_t max_brightness_{255};
     uint8_t brightness_destination_{0};
     unsigned long _lastTime = millis();
-    uint8_t brightness_fade_speed_{100}; // Fixed delay of 20ms
+    uint8_t brightness_fade_speed_{50}; // Configurable fade speed in ms
+    uint8_t brightness_step_size_{2}; // Configurable step size
 
     bool enabled_{true};
     uint16_t width_{64};
