@@ -50,8 +50,8 @@ namespace esphome {
           } else if (current_page_ptr != nullptr) {
             // Same page - use smart clearing logic
             scroll_update_count++;
-            // During scrolling, only clear every 20 updates (1.6 seconds) to prevent buildup
-            if (scroll_update_count >= 20) {
+            // During scrolling, only clear every 30 updates (3.6 seconds) to prevent buildup
+            if (scroll_update_count >= 30) {
               this->clear_efficient();
               last_clear_time = current_time;
               scroll_update_count = 0;
