@@ -119,8 +119,6 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
       // More efficient clear that reduces flicker
       if (this->dma_display_ != nullptr) {
         this->dma_display_->clearScreen();
-        // Small delay to ensure clear is complete before next frame
-        delayMicroseconds(100);
       }
     };
     void filled_rectangle(int x1, int y1, int width, int height, Color color = display::COLOR_ON);
