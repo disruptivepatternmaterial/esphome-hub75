@@ -27,40 +27,38 @@ namespace esphome {
       HUB75Display::update();
 
       if (this->enabled_) {
-          // Smart auto-clear: only clear when necessary to reduce flicker
-          if (this->auto_clear_enabled_) {
-            // Smart auto-clear: only clear if we're switching pages or if it's been a while
-            static uint32_t last_clear_time = 0;
-            static uint32_t scroll_update_count = 0;
+        // Smart auto-clear: only clear when necessary to reduce flicker
+        if (this->auto_clear_enabled_) {
+          // Smart auto-clear: only clear if we're switching pages or if it's been a while
+          static uint32_t last_clear_time = 0;
+          static const char* last_page_id = nullptr;
+          static uint32_t scroll_update_count = 0;
           
-          // Use page pointer comparison instead of name lookup
-          static const void* last_page_ptr = nullptr;
-          const void* current_page_ptr = (this->page_ != nullptr) ? this->page_ : nullptr;
+          const char* current_page_id = (this->page_ != nullptr) ? this->page_->get_name().c_str() : "default";
           uint32_t current_time = millis();
           
-          // Check if page changed
-          bool page_changed = (last_page_ptr != current_page_ptr);
-          
-          if (page_changed) {
-            // Page changed - always clear
-            this->clear_efficient();
-            last_clear_time = current_time;
-            last_page_ptr = current_page_ptr;
-            scroll_update_count = 0;
-          } else if (current_page_ptr != nullptr) {
-            // Same page - use smart clearing logic
+          // Special handling for scroll_clock page - minimal clearing for smooth scrolling
+          if (strcmp(current_page_id, "scroll_clock") == 0) {
             scroll_update_count++;
+            // Only clear when switching TO scroll page, not during scrolling
+            if (last_page_id != current_page_id) {
+              this->clear_efficient();
+              last_clear_time = current_time;
+              last_page_id = current_page_id;
+              scroll_update_count = 0;
+            }
             // During scrolling, only clear every 30 updates (3.6 seconds) to prevent buildup
-            if (scroll_update_count >= 30) {
+            else if (scroll_update_count >= 30) {
               this->clear_efficient();
               last_clear_time = current_time;
               scroll_update_count = 0;
             }
           } else {
-            // No page - clear if it's been more than 100ms since last clear
-            if ((current_time - last_clear_time) > 100) {
+            // Normal pages - clear if page changed or if it's been more than 100ms since last clear
+            if (last_page_id != current_page_id || (current_time - last_clear_time) > 100) {
               this->clear_efficient();
               last_clear_time = current_time;
+              last_page_id = current_page_id;
               scroll_update_count = 0;
             }
           }
