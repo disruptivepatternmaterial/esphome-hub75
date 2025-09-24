@@ -15,7 +15,7 @@ using esphome::esp_log_printf_;
 // This is needed for the underlaying library "ESP32 HUB75 LED MATRIX PANEL DMA Display"
 
 
-#include <ESP32-HUB75-MatrixPanel-DMA.h>
+#include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 
 namespace esphome {
 namespace hub75_base {
