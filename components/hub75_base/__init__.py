@@ -44,6 +44,7 @@ CONF_I2SSPEED = 'i2sspeed'
 CONF_LATCH_BLANKING = 'latch_blanking'
 CONF_CLOCK_PHASE = 'clock_phase'
 CONF_DOUBLE_BUFFER = 'double_buffer'
+CONF_LINE_DRIVER = 'line_driver'
 
 hub75_base_ns = cg.esphome_ns.namespace("hub75_base")
 HUB75Display = hub75_base_ns.class_(
@@ -55,7 +56,17 @@ DRIVERS = {
     "FM6124": shift_driver.FM6124,
     "FM6126A": shift_driver.FM6126A,
     "ICN2038S": shift_driver.ICN2038S,
-    "MBI5124": shift_driver.MBI5124
+    "MBI5124": shift_driver.MBI5124,
+    "DP3246": shift_driver.DP3246
+}
+
+line_driver = cg.global_ns.namespace("HUB75_I2S_CFG").enum("line_driver")
+LINE_DRIVERS = {
+    "TYPE138": line_driver.TYPE138,
+    "TYPE595": line_driver.TYPE595,
+    "TYPE_DIRECT": line_driver.TYPE_DIRECT,
+    "SM5266P": line_driver.SM5266P,
+    "SM5368": line_driver.SM5368
 }
 
 clk_speed = cg.global_ns.namespace("HUB75_I2S_CFG").enum("clk_speed")
@@ -100,6 +111,10 @@ HUB75_SCHEMA = (
 
             cv.Optional(CONF_CHIPSET): cv.enum(
                 DRIVERS, upper=True, space="_"
+            ),
+
+            cv.Optional(CONF_LINE_DRIVER): cv.enum(
+                LINE_DRIVERS, upper=True, space="_"
             ),
 
             cv.Optional(CONF_I2SSPEED): cv.enum(
@@ -158,6 +173,9 @@ async def setup_hub75_display(var, config):
 
     if CONF_CHIPSET in config:
         cg.add(var.set_driver(config[CONF_CHIPSET]))
+
+    if CONF_LINE_DRIVER in config:
+        cg.add(var.set_line_driver(config[CONF_LINE_DRIVER]))
 
     if CONF_I2SSPEED in config:
         cg.add(var.set_i2sspeed(config[CONF_I2SSPEED]))

@@ -23,6 +23,9 @@ namespace esphome
       if (this->user_defined_driver_)
         mxconfig.driver = this->driver_;
 
+      if (this->user_defined_line_driver_)
+        mxconfig.line_decoder = this->line_driver_;
+
       if (this->user_defined_i2sspeed_)
         mxconfig.i2sspeed = this->i2sspeed_;
 
@@ -96,6 +99,9 @@ namespace esphome
         break;
       case HUB75_I2S_CFG::shift_driver::MBI5124:
         ESP_LOGCONFIG(TAG, "  Driver: MBI5124");
+        break;
+      case HUB75_I2S_CFG::shift_driver::DP3246:
+        ESP_LOGCONFIG(TAG, "  Driver: DP3246");
         break;
       default:
         ESP_LOGCONFIG(TAG, "  Driver: Unknown");

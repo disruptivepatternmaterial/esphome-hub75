@@ -83,6 +83,11 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
       this->driver_ = driver;
     };
 
+    void set_line_driver(HUB75_I2S_CFG::line_driver line_driver) {
+      this->user_defined_line_driver_ = true;
+      this->line_driver_ = line_driver;
+    };
+
     void set_i2sspeed(HUB75_I2S_CFG::clk_speed speed) {
       this->user_defined_i2sspeed_ = true;
       this->i2sspeed_ = speed;
@@ -126,6 +131,9 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
 
     bool user_defined_driver_{false};
     HUB75_I2S_CFG::shift_driver driver_;
+
+    bool user_defined_line_driver_{false};
+    HUB75_I2S_CFG::line_driver line_driver_;
 
     bool user_defined_i2sspeed_{false};
     HUB75_I2S_CFG::clk_speed i2sspeed_;
