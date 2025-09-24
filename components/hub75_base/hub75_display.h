@@ -95,6 +95,8 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
       this->clock_phase_ = clock_phase;
     }
 
+    void set_double_buffer(bool double_buffer) { this->double_buffer_enabled_ = double_buffer; };
+
     display::DisplayType get_display_type() override { return display::DisplayType::DISPLAY_TYPE_COLOR; }
 
     // START: override methods from base class Display to use native performant functions of HUB75 DMA display

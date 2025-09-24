@@ -43,6 +43,7 @@ CONF_CHAIN_LENGTH = 'chain_length'
 CONF_I2SSPEED = 'i2sspeed'
 CONF_LATCH_BLANKING = 'latch_blanking'
 CONF_CLOCK_PHASE = 'clock_phase'
+CONF_DOUBLE_BUFFER = 'double_buffer'
 
 hub75_base_ns = cg.esphome_ns.namespace("hub75_base")
 HUB75Display = hub75_base_ns.class_(
@@ -108,6 +109,7 @@ HUB75_SCHEMA = (
 
             cv.Optional(CONF_LATCH_BLANKING): cv.positive_int,
             cv.Optional(CONF_CLOCK_PHASE, default=False): cv.boolean,
+            cv.Optional(CONF_DOUBLE_BUFFER, default=True): cv.boolean,
         }
     )
 )
@@ -166,6 +168,9 @@ async def setup_hub75_display(var, config):
 
     if CONF_CLOCK_PHASE in config:
         cg.add(var.set_clock_phase(config[CONF_CLOCK_PHASE]))
+
+    if CONF_DOUBLE_BUFFER in config:
+        cg.add(var.set_double_buffer(config[CONF_DOUBLE_BUFFER]))
 
     if cv.Version.parse(ESPHOME_VERSION) < cv.Version.parse("2023.12.0"):
         await cg.register_component(var, config)
