@@ -50,12 +50,12 @@ namespace esphome
       this->dma_display_->clearScreen();
 
       // Now write some content to the display
-      this->start_screen_();
+      //this->start_screen_();
 
       if (mxconfig.double_buff) {
         // Write same stuff to other buffer
         this->dma_display_->flipDMABuffer();
-        this->start_screen_();
+        //this->start_screen_();
       }
     }
 
