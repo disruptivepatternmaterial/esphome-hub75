@@ -155,11 +155,12 @@ namespace esphome
     }
 
     void HOT HUB75Display::draw_pixel_at(int x, int y, Color color) {
-      // Reject invalid pixels
-      if (x >= this->get_width_internal() || x < 0 || y >= this->get_height_internal() || y < 0)
+      // Optimized bounds checking - use unsigned comparison for better performance
+      if ((unsigned int)x >= (unsigned int)this->get_width_internal() || 
+          (unsigned int)y >= (unsigned int)this->get_height_internal())
         return;
 
-      // Update pixel value in buffer
+      // Direct pixel drawing - no intermediate variables
       this->dma_display_->drawPixelRGB888(x, y, color.r, color.g, color.b);
     }
 
@@ -174,16 +175,27 @@ namespace esphome
     }
 
     void HUB75Display::update_() { 
-      this->dma_display_->fillRect(0, 8, 64, 7, display::ColorUtil::color_to_565(backgroundColor));
-      this->dma_display_->setCursor(0, 8);
-      this->dma_display_->setTextColor(display::ColorUtil::color_to_565(COLOR_RED));
-
+      // Optimized update - only redraw when necessary
+      static ESPTime last_time = ESPTime();
+      static bool last_valid = false;
+      
       ESPTime now = this->time_->now();
-      if (now.is_valid()) {
-        this->dma_display_->printf("%02d:%02d:%02d", now.hour, now.minute, now.second);
-      }
-      else {
-        this->dma_display_->print("--:--:-- ?");
+      bool is_valid = now.is_valid();
+      
+      // Only update if time changed or validity changed
+      if (now != last_time || is_valid != last_valid) {
+        this->dma_display_->fillRect(0, 8, 64, 7, display::ColorUtil::color_to_565(backgroundColor));
+        this->dma_display_->setCursor(0, 8);
+        this->dma_display_->setTextColor(display::ColorUtil::color_to_565(COLOR_RED));
+
+        if (is_valid) {
+          this->dma_display_->printf("%02d:%02d:%02d", now.hour, now.minute, now.second);
+        } else {
+          this->dma_display_->print("--:--:-- ?");
+        }
+        
+        last_time = now;
+        last_valid = is_valid;
       }
     }
 
@@ -204,41 +216,47 @@ namespace esphome
     }
 
     void HUB75Display::update_brightness_(unsigned long timeInMillis) {
+      // Optimized brightness update - only process when needed
+      static unsigned long last_brightness_update = 0;
+      static bool brightness_changing = false;
+      
+      // Only update brightness if it's changing and enough time has passed
+      if (brightness_ != brightness_destination_) {
+        if (!brightness_changing) {
+          brightness_changing = true;
+          last_brightness_update = timeInMillis;
+        }
+        
+        if (timeInMillis - last_brightness_update >= brightness_fade_speed_) {
+          // Optimized brightness calculation
+          int8_t brightness_diff = brightness_destination_ - brightness_;
+          int8_t step = (brightness_diff > 0) ? BRIGHTNESS_STEP : -BRIGHTNESS_STEP;
+          
+          brightness_ += step;
+          
+          // Clamp to destination
+          if ((step > 0 && brightness_ >= brightness_destination_) ||
+              (step < 0 && brightness_ <= brightness_destination_)) {
+            brightness_ = brightness_destination_;
+            brightness_changing = false;
+          }
+          
+          this->set_brightness(brightness_);
+          last_brightness_update = timeInMillis;
+        }
+      } else {
+        brightness_changing = false;
+      }
+      
+      // Optimized FPS logging - only log every 5 seconds
       frameCounter_++;
-      if ((timeInMillis - frameTime_) >= 1000) {
-        ESP_LOGD(TAG, "%d frames per second!", frameCounter_);
-
+      if ((timeInMillis - frameTime_) >= FPS_LOG_INTERVAL) { // Log every 5 seconds
+        ESP_LOGD(TAG, "%d frames per 5 seconds (%.1f FPS)", frameCounter_, frameCounter_ / 5.0);
         frameTime_ = timeInMillis;
         frameCounter_ = 0;
       }
-
-      if (timeInMillis - _lastTime >= brightness_fade_speed_) {
-        // Do the morph logic if required.
-        if (brightness_ != brightness_destination_) {
-          // 0 -> 255 256/20
-          if (brightness_destination_ > brightness_) {
-            if (brightness_ + 2 > brightness_destination_ || brightness_ + 2 > 255) {
-              brightness_ = brightness_destination_;
-            } else {
-              brightness_ = brightness_ + 2;
-            }
-          }
-
-          if (brightness_destination_ < brightness_) {
-            if (brightness_ < 2 || brightness_ - 2 < brightness_destination_) {
-              brightness_ = brightness_destination_;
-            } else {
-              brightness_ = brightness_ - 2;
-            }
-          }
-
-          uint8_t brightness_destination_saved = brightness_destination_;
-          this->set_brightness(brightness_);
-          brightness_destination_ = brightness_destination_saved;
-        }
-
-        _lastTime = timeInMillis;
-      }
+      
+      _lastTime = timeInMillis;
     }
 
   }  // namespace hub75_base

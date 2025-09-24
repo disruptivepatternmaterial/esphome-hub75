@@ -149,14 +149,19 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
     uint8_t brightness_destination_{0};
     unsigned long _lastTime = millis();
     uint8_t brightness_fade_speed_{100}; // Fixed delay of 20ms
+    
+    // Performance optimization constants
+    static constexpr uint8_t BRIGHTNESS_STEP = 2;
+    static constexpr uint16_t FPS_LOG_INTERVAL = 5000; // 5 seconds
 
     bool enabled_{true};
     uint16_t width_{64};
     uint16_t height_{32};
     bool double_buffer_enabled_{true};
 
-    int get_width_internal() override { return width_; };
-    int get_height_internal() override { return height_; };
+    // Optimized inline getters for better performance
+    inline int get_width_internal() override { return width_; };
+    inline int get_height_internal() override { return height_; };
     virtual void update_();
     virtual void start_screen_();
     void update_brightness_(unsigned long timeInMillis);
