@@ -56,7 +56,7 @@ DRIVERS = {
     "FM6126A": shift_driver.FM6126A,
     "ICN2038S": shift_driver.ICN2038S,
     "MBI5124": shift_driver.MBI5124,
-    "SM5266": shift_driver.SM5266P
+    "SM5266": shift_driver.SM5266
 }
 
 clk_speed = cg.global_ns.namespace("HUB75_I2S_CFG").enum("clk_speed")
