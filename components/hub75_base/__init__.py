@@ -54,8 +54,10 @@ shift_driver = cg.global_ns.namespace("HUB75_I2S_CFG").enum("shift_driver")
 DRIVERS = {
     "SHIFTREG": shift_driver.SHIFTREG,
     "FM6124": shift_driver.FM6124,
+    "FM6047": shift_driver.FM6124,  # FM6047 is compatible with FM6124 and uses the same initialization
     "FM6126A": shift_driver.FM6126A,
     "ICN2038S": shift_driver.ICN2038S,
+    "ICN2037BP": shift_driver.ICN2038S,  # ICN2037BP is compatible with ICN2038S and uses the same initialization
     "MBI5124": shift_driver.MBI5124,
     "DP3246": shift_driver.DP3246
 }

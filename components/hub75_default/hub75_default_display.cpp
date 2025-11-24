@@ -26,7 +26,18 @@ namespace esphome {
       HUB75Display::update();
 
       if (this->enabled_) {
-        if (this->auto_clear_enabled_) {
+        // With double buffering: flip first to get back buffer, clear it, draw, then flip to show
+        // This ensures clearing happens on the non-visible buffer
+        if (this->double_buffer_enabled_) {
+          // Flip to get the back buffer (the one we'll draw to)
+          this->dma_display_->flipDMABuffer();
+          
+          // Clear the back buffer if auto_clear is enabled (not visible, so no lag)
+          if (this->auto_clear_enabled_) {
+            this->dma_display_->fillScreenRGB888(0, 0, 0);
+          }
+        } else if (this->auto_clear_enabled_) {
+          // Single buffer mode: clear the visible buffer (will cause visible lag)
           this->clear();
         }
 
@@ -38,7 +49,11 @@ namespace esphome {
         else {
           update_();
         }
-        this->dma_display_->flipDMABuffer();
+        
+        // Flip to show the newly drawn frame (only if double buffering is enabled)
+        if (this->double_buffer_enabled_) {
+          this->dma_display_->flipDMABuffer();
+        }
       }
       else {
         this->dma_display_->clearScreen();

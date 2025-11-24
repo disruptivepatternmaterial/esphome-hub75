@@ -124,6 +124,14 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
     // Home Assistant Service Call Definition
     void on_set_brightness(int brightness);
 
+    // Diagnostic methods to get configuration as strings
+    std::string get_chipset_name();
+    std::string get_i2sspeed_name();
+    std::string get_line_driver_name();
+    std::string get_config_summary();
+    void run_test_pattern();
+    void dump_config_to_log();  // Dump full config to ESP log
+
   //protected:
     std::string display_name_ = "HUB75";
     MatrixPanel_I2S_DMA *dma_display_{nullptr};
@@ -165,6 +173,7 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
     virtual void update_();
     virtual void start_screen_();
     void update_brightness_(unsigned long timeInMillis);
+    int calculate_optimal_latch_blanking();  // Auto-calculate blanking based on chipset, size, and speed
 
     uint8_t get_brightness() { return brightness_; };
 
