@@ -88,6 +88,36 @@ display:
   clock_phase: False
 ```
 
+### Supported Chipsets
+The component supports the following shift register driver chipsets:
+- `SHIFTREG` - Generic shift register (default)
+- `FM6124` - Fuman FM6124 driver IC
+- `FM6047` - Fuman FM6047 driver IC (compatible with FM6124, uses same initialization)
+- `FM6126A` - Fuman FM6126A driver IC
+- `ICN2038S` - Chipone ICN2038S driver IC
+- `ICN2037BP` - Chipone ICN2037BP driver IC (compatible with ICN2038S, uses same initialization)
+- `MBI5124` - Macroblock MBI5124 driver IC
+- `DP3246` - DP3246 driver IC
+
+Note: 
+- FM6047 and FM6124 are compatible and use the same initialization code. When `FM6047` is specified in the configuration, it will be initialized using the FM6124 driver settings.
+- ICN2037BP and ICN2038S are compatible (both from Chipone ICN203x series) and use the same initialization code. When `ICN2037BP` is specified in the configuration, it will be initialized using the ICN2038S driver settings.
+
+### Line Drivers
+The component supports the following line driver (row decoder) types:
+- `TYPE138` - Standard 74HC138 decoder (default for most panels)
+- `TYPE595` - 74HC595 shift register based decoder
+- `TYPE_DIRECT` - Direct GPIO control
+- `SM5266P` - SM5266P line driver IC
+- `SM5368` - SM5368 line driver IC (same as TYPE595)
+
+**Note on TC4953SS**: If your display uses the TC4953SS line driver IC and you're experiencing a one-pixel left shift (as if the display starts at position -1), try:
+1. **Invert clock phase**: Set `clock_phase: true` (or `false` if already `true`)
+2. **Adjust latch blanking**: Try values like `1`, `2`, `4`, or `8`
+3. **Try different line driver**: If using `TYPE138`, try `TYPE595` or vice versa
+
+The pixel shift is typically caused by clock phase or latch timing issues, not the line driver type itself.
+
 ## Remarks
 ### Maximal refresh rate
 With the config file `hub75default_minimal.yaml` you can reach up to `141` frames per second (by setting `update_interval: 5ms` in the display section). This is possible thanks to the new `ESP32 HUB75 LED MATRIX PANEL DMA Display` library version `3.x`. The old one (before `2.0.7` was used) reached only `107` frames per second.

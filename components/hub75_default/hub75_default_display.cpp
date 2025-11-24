@@ -25,30 +25,52 @@ namespace esphome {
     void HUB75DefaultDisplay::update() {
       HUB75Display::update();
 
-      if (this->enabled_) {
+      if (!this->enabled_) {
+        this->dma_display_->clearScreen();
+        return;
+      }
+
+      if (this->double_buffer_enabled_) {
+        // Double buffering: flip to get back buffer, clear it, draw, then flip to show
+        // Flip first to get the back buffer (the one we'll draw to)
+        this->dma_display_->flipDMABuffer();
+        
+        // Clear the back buffer if auto_clear is enabled (not visible, so no lag)
         if (this->auto_clear_enabled_) {
-          this->clear();
+          this->dma_display_->fillScreenRGB888(0, 0, 0);
         }
 
+        // Draw to the back buffer
         if (this->page_ != nullptr) {
           this->page_->get_writer()(*this);
         } else if (this->writer_.has_value()) {
           (*this->writer_)(*this);
-        }
-        else {
+        } else {
           update_();
         }
+        
+        // Flip to show the newly drawn frame
         this->dma_display_->flipDMABuffer();
-      }
-      else {
-        this->dma_display_->clearScreen();
+      } else {
+        // Single buffer mode: clear the visible buffer if needed
+        if (this->auto_clear_enabled_) {
+          this->clear();
+        }
+
+        // Draw to the single buffer
+        if (this->page_ != nullptr) {
+          this->page_->get_writer()(*this);
+        } else if (this->writer_.has_value()) {
+          (*this->writer_)(*this);
+        } else {
+          update_();
+        }
       }
 
-      // remove all not ended clipping regions
+      // Clean up clipping regions
       while (is_clipping()) {
         end_clipping();
       }
-
     }
 
     void HUB75DefaultDisplay::update_() { 

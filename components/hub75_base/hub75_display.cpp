@@ -2,6 +2,8 @@
 using namespace esphome;
 #include "hub75_display.h"
 #include <Fonts/TomThumb.h>
+#include <string>
+#include <cstdio>
 
 namespace esphome
 {
@@ -9,6 +11,77 @@ namespace esphome
   {
 
     static const char *const TAG = "hub75_base";
+
+    int HUB75Display::calculate_optimal_latch_blanking() {
+      // If user explicitly set latch_blanking, use it
+      if (this->latch_blanking_ >= 0) {
+        ESP_LOGCONFIG(TAG, "  Using user-defined latch blanking: %d", this->latch_blanking_);
+        return this->latch_blanking_;
+      }
+      
+      // Automatic calculation based on chipset and display characteristics
+      // Start more conservative - too much blanking can cause issues too
+      int blanking = 1; // Default minimum
+      int base_blanking = 1;
+      int size_adjustment = 0;
+      int speed_adjustment = 0;
+      
+      // Chipset-specific defaults (more conservative values)
+      if (this->user_defined_driver_) {
+        switch (this->driver_) {
+          case HUB75_I2S_CFG::shift_driver::ICN2038S:
+            // ICN2037BP maps to ICN2038S, so this covers both
+            // More conservative: ICN203x can work with less blanking
+            base_blanking = 2; // Reduced from 4
+            break;
+          case HUB75_I2S_CFG::shift_driver::FM6124:
+            base_blanking = 1;
+            break;
+          case HUB75_I2S_CFG::shift_driver::MBI5124:
+            base_blanking = 2;
+            break;
+          default:
+            base_blanking = 1;
+            break;
+        }
+      }
+      blanking = base_blanking;
+      
+      // Adjust for display size (more conservative adjustments)
+      int total_pixels = this->width_ * this->height_ * this->chain_length_;
+      if (total_pixels > 4096) { // Large displays (128x64, etc.)
+        size_adjustment = 1; // Reduced from 2
+      } else if (total_pixels > 2048) { // Medium displays
+        size_adjustment = 0; // Reduced from 1
+      }
+      blanking += size_adjustment;
+      
+      // Adjust for I2S speed (more conservative)
+      if (this->user_defined_i2sspeed_) {
+        switch (this->i2sspeed_) {
+          case HUB75_I2S_CFG::clk_speed::HZ_20M:
+            speed_adjustment = 1; // Reduced from 2
+            break;
+          case HUB75_I2S_CFG::clk_speed::HZ_16M:  // HZ_15M and HZ_16M are the same enum value
+            speed_adjustment = 0; // Reduced from 1
+            break;
+          default:
+            speed_adjustment = 0;
+            break;
+        }
+      }
+      blanking += speed_adjustment;
+      
+      // Cap at reasonable maximum (too high can cause other issues)
+      if (blanking > 8)  // Reduced cap from 16 to 8
+        blanking = 8;
+      
+      // Log the calculation breakdown for debugging
+      ESP_LOGCONFIG(TAG, "  Auto-calculated latch blanking: %d (base: %d, size: +%d, speed: +%d)", 
+                    blanking, base_blanking, size_adjustment, speed_adjustment);
+      
+      return blanking;
+    }
 
     void HUB75Display::setup() {
       ESP_LOGCONFIG(TAG, "Setting up HUB75Display...");
@@ -29,8 +102,9 @@ namespace esphome
       if (this->user_defined_i2sspeed_)
         mxconfig.i2sspeed = this->i2sspeed_;
 
-      if (this->latch_blanking_ >= 0)
-        mxconfig.latch_blanking = this->latch_blanking_;
+      // Use automatic blanking calculation if not explicitly set
+      // (logging is done inside calculate_optimal_latch_blanking)
+      mxconfig.latch_blanking = this->calculate_optimal_latch_blanking();
 
       if (this->user_defined_clock_phase_)
         mxconfig.clkphase = this->clock_phase_;
@@ -89,13 +163,13 @@ namespace esphome
         ESP_LOGCONFIG(TAG, "  Driver: SHIFTREG");
         break;
       case HUB75_I2S_CFG::shift_driver::FM6124:
-        ESP_LOGCONFIG(TAG, "  Driver: FM6124");
+        ESP_LOGCONFIG(TAG, "  Driver: FM6124/FM6047 (compatible chipsets)");
         break;
       case HUB75_I2S_CFG::shift_driver::FM6126A:
         ESP_LOGCONFIG(TAG, "  Driver: FM6126A");
         break;
       case HUB75_I2S_CFG::shift_driver::ICN2038S:
-        ESP_LOGCONFIG(TAG, "  Driver: ICN2038S");
+        ESP_LOGCONFIG(TAG, "  Driver: ICN2038S/ICN2037BP (compatible chipsets)");
         break;
       case HUB75_I2S_CFG::shift_driver::MBI5124:
         ESP_LOGCONFIG(TAG, "  Driver: MBI5124");
@@ -126,6 +200,125 @@ namespace esphome
       ESP_LOGCONFIG(TAG, "  Clock Phase: %s", dma_display_->getCfg().clkphase ? "true" : "false");
 
       ESP_LOGCONFIG(TAG, "  Min refresh rate: %i", dma_display_->getCfg().min_refresh_rate);
+    }
+
+    std::string HUB75Display::get_chipset_name() {
+      if (!this->dma_display_) return "Unknown";
+      switch (this->dma_display_->getCfg().driver) {
+        case HUB75_I2S_CFG::shift_driver::SHIFTREG: return "SHIFTREG";
+        case HUB75_I2S_CFG::shift_driver::FM6124: return "FM6124/FM6047";  // FM6047 uses FM6124 initialization
+        case HUB75_I2S_CFG::shift_driver::FM6126A: return "FM6126A";
+        case HUB75_I2S_CFG::shift_driver::ICN2038S: return "ICN2038S/ICN2037BP";  // ICN2037BP uses ICN2038S initialization
+        case HUB75_I2S_CFG::shift_driver::MBI5124: return "MBI5124";
+        case HUB75_I2S_CFG::shift_driver::DP3246: return "DP3246";
+        default: return "Unknown";
+      }
+    }
+
+    std::string HUB75Display::get_i2sspeed_name() {
+      if (!this->dma_display_) return "Unknown";
+      switch (this->dma_display_->getCfg().i2sspeed) {
+        case HUB75_I2S_CFG::clk_speed::HZ_8M: return "HZ_8M/HZ_10M";  // HZ_8M and HZ_10M are the same enum value
+        case HUB75_I2S_CFG::clk_speed::HZ_16M: return "HZ_15M/HZ_16M";  // HZ_15M and HZ_16M are the same enum value
+        case HUB75_I2S_CFG::clk_speed::HZ_20M: return "HZ_20M";
+        default: return "Unknown";
+      }
+    }
+
+    std::string HUB75Display::get_line_driver_name() {
+      if (!this->dma_display_) return "Unknown";
+      switch (this->dma_display_->getCfg().line_decoder) {
+        case HUB75_I2S_CFG::line_driver::TYPE138: return "TYPE138";
+        case HUB75_I2S_CFG::line_driver::TYPE595: return "TYPE595/SM5368";  // TYPE595 and SM5368 are the same enum value
+        case HUB75_I2S_CFG::line_driver::TYPE_DIRECT: return "TYPE_DIRECT";
+        case HUB75_I2S_CFG::line_driver::SM5266P: return "SM5266P";
+        default: return "Unknown";
+      }
+    }
+
+    std::string HUB75Display::get_config_summary() {
+      if (!this->dma_display_) return "Display not initialized";
+      char buffer[256];
+      snprintf(buffer, sizeof(buffer), 
+        "Chipset:%s I2SSpeed:%s LineDriver:%s LatchBlanking:%d ClockPhase:%s Width:%dx%d",
+        this->get_chipset_name().c_str(),
+        this->get_i2sspeed_name().c_str(),
+        this->get_line_driver_name().c_str(),
+        this->dma_display_->getCfg().latch_blanking,
+        this->dma_display_->getCfg().clkphase ? "true" : "false",
+        this->width_,
+        this->height_);
+      return std::string(buffer);
+    }
+
+    void HUB75Display::run_test_pattern() {
+      if (!this->dma_display_) return;
+      ESP_LOGI(TAG, "Running diagnostic test pattern...");
+      
+      // Clear screen
+      this->dma_display_->clearScreen();
+      delay(100);
+      
+      // Test 1: Fill with red (top half)
+      this->dma_display_->fillRect(0, 0, this->width_, this->height_ / 2, 255, 0, 0);
+      delay(500);
+      
+      // Test 2: Fill with green (bottom half)
+      this->dma_display_->fillRect(0, this->height_ / 2, this->width_, this->height_ / 2, 0, 255, 0);
+      delay(500);
+      
+      // Test 3: Fill with blue (full screen)
+      this->dma_display_->fillScreenRGB888(0, 0, 255);
+      delay(500);
+      
+      // Test 4: Draw corner markers
+      this->dma_display_->fillRect(0, 0, 4, 4, 255, 255, 255); // Top-left
+      this->dma_display_->fillRect(this->width_ - 4, 0, 4, 4, 255, 255, 255); // Top-right
+      this->dma_display_->fillRect(0, this->height_ - 4, 4, 4, 255, 255, 255); // Bottom-left
+      this->dma_display_->fillRect(this->width_ - 4, this->height_ - 4, 4, 4, 255, 255, 255); // Bottom-right
+      delay(1000);
+      
+      // Test 5: Draw grid pattern
+      this->dma_display_->clearScreen();
+      for (int x = 0; x < this->width_; x += 8) {
+        this->dma_display_->drawFastVLine(x, 0, this->height_, 255, 255, 255);
+      }
+      for (int y = 0; y < this->height_; y += 8) {
+        this->dma_display_->drawFastHLine(0, y, this->width_, 255, 255, 255);
+      }
+      delay(2000);
+      
+      // Test 6: Draw pixel-by-pixel test (check pixel mapping)
+      this->dma_display_->clearScreen();
+      for (int y = 0; y < this->height_; y++) {
+        for (int x = 0; x < this->width_; x++) {
+          uint8_t r = (x * 255) / this->width_;
+          uint8_t g = (y * 255) / this->height_;
+          uint8_t b = 128;
+          this->dma_display_->drawPixelRGB888(x, y, r, g, b);
+        }
+      }
+      delay(2000);
+      
+      ESP_LOGI(TAG, "Test pattern complete");
+    }
+
+    void HUB75Display::dump_config_to_log() {
+      if (!this->dma_display_) {
+        ESP_LOGW(TAG, "Display not initialized - cannot dump config");
+        return;
+      }
+      ESP_LOGI(TAG, "=== HUB75 Display Configuration ===");
+      ESP_LOGI(TAG, "Chipset: %s", this->get_chipset_name().c_str());
+      ESP_LOGI(TAG, "I2S Speed: %s", this->get_i2sspeed_name().c_str());
+      ESP_LOGI(TAG, "Line Driver: %s", this->get_line_driver_name().c_str());
+      ESP_LOGI(TAG, "Latch Blanking: %d", this->dma_display_->getCfg().latch_blanking);
+      ESP_LOGI(TAG, "Clock Phase: %s", this->dma_display_->getCfg().clkphase ? "true" : "false");
+      ESP_LOGI(TAG, "Width: %d, Height: %d", this->width_, this->height_);
+      ESP_LOGI(TAG, "Chain Length: %d", this->chain_length_);
+      ESP_LOGI(TAG, "Brightness: %d (min: %d, max: %d)", this->brightness_, this->min_brightness_, this->max_brightness_);
+      ESP_LOGI(TAG, "Double Buffer: %s", this->double_buffer_enabled_ ? "enabled" : "disabled");
+      ESP_LOGI(TAG, "===================================");
     }
 
     void HUB75Display::set_brightness(uint8_t brightness) {
