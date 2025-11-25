@@ -138,12 +138,13 @@ namespace esphome
       this->set_brightness(brightness, true);
       
       // Clear both buffers if double buffering is enabled
+      // Use clearScreen() which is optimized by the library
       if (mxconfig.double_buff) {
         // Clear the current back buffer (drawing target)
-        this->dma_display_->fillScreenRGB888(0, 0, 0);
+        this->dma_display_->clearScreen();
         // Flip to clear the other buffer
         this->dma_display_->flipDMABuffer();
-        this->dma_display_->fillScreenRGB888(0, 0, 0);
+        this->dma_display_->clearScreen();
         // Flip back to have a clean back buffer ready for drawing
         this->dma_display_->flipDMABuffer();
       } else {
@@ -389,8 +390,13 @@ namespace esphome
         return;
       }
       
-      // Use library's native fillScreenRGB888 method for optimal performance
-      this->dma_display_->fillScreenRGB888(color.r, color.g, color.b);
+      // Optimize: use clearScreen() for black fills (faster)
+      if (color.r == 0 && color.g == 0 && color.b == 0) {
+        this->dma_display_->clearScreen();
+      } else {
+        // Use library's native fillScreenRGB888 method for other colors
+        this->dma_display_->fillScreenRGB888(color.r, color.g, color.b);
+      }
     }
 
     void HUB75Display::filled_rectangle(int x1, int y1, int width, int height, Color color) {
