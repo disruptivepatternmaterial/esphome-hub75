@@ -106,7 +106,11 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
 
     // START: override methods from base class Display to use native performant functions of HUB75 DMA display
     void fill(Color color) override;
-    void clear() { this->dma_display_->clearScreen(); };
+    void clear() { 
+      if (this->dma_display_) {
+        this->dma_display_->clearScreen();
+      }
+    }
     void filled_rectangle(int x1, int y1, int width, int height, Color color = display::COLOR_ON);
     void draw_pixel_at(int x, int y, Color color) override;
     // END: override methods from base class Display to use native performant functions of HUB75 DMA display

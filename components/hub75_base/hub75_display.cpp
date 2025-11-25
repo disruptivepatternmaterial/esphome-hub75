@@ -112,25 +112,46 @@ namespace esphome
       // The min refresh rate correlates with the update frequency of the component
       mxconfig.min_refresh_rate = 1000 / this->update_interval_;
 
-      //TODO: How to use double buffering properly?
+      // Configure double buffering - when enabled, library maintains two buffers
+      // for smooth, flicker-free updates
       mxconfig.double_buff = this->double_buffer_enabled_;
 
       // Display Setup
       this->dma_display_ = new MatrixPanel_I2S_DMA(mxconfig);
-      this->dma_display_->begin();
+      
+      if (!this->dma_display_) {
+        ESP_LOGE(TAG, "Failed to allocate MatrixPanel_I2S_DMA object!");
+        return;
+      }
+      
+      if (!this->dma_display_->begin()) {
+        ESP_LOGE(TAG, "Failed to initialize HUB75 display!");
+        return;
+      }
+      
+      ESP_LOGCONFIG(TAG, "HUB75 display initialized successfully");
+      ESP_LOGCONFIG(TAG, "  Double buffering: %s", this->double_buffer_enabled_ ? "enabled" : "disabled");
+      
+      // Set brightness with fade
       uint8_t brightness = this->brightness_;
       this->set_brightness(0, false);
       this->set_brightness(brightness, true);
-      this->dma_display_->clearScreen();
-
-      // Now write some content to the display
-      //this->start_screen_();
-
+      
+      // Clear both buffers if double buffering is enabled
       if (mxconfig.double_buff) {
-        // Write same stuff to other buffer
+        // Clear the current back buffer (drawing target)
+        this->dma_display_->fillScreenRGB888(0, 0, 0);
+        // Flip to clear the other buffer
         this->dma_display_->flipDMABuffer();
-        //this->start_screen_();
+        this->dma_display_->fillScreenRGB888(0, 0, 0);
+        // Flip back to have a clean back buffer ready for drawing
+        this->dma_display_->flipDMABuffer();
+      } else {
+        // Single buffer mode - just clear once
+        this->dma_display_->clearScreen();
       }
+      
+      ESP_LOGCONFIG(TAG, "Display buffers initialized and cleared");
     }
 
     void HUB75Display::on_set_brightness(int brightness) {
@@ -348,23 +369,38 @@ namespace esphome
     }
 
     void HOT HUB75Display::draw_pixel_at(int x, int y, Color color) {
+      // Safety check - ensure display is initialized
+      if (!this->dma_display_) {
+        return;
+      }
+      
       // Optimized bounds checking - use unsigned comparison for better performance
       if ((unsigned int)x >= (unsigned int)this->get_width_internal() || 
           (unsigned int)y >= (unsigned int)this->get_height_internal())
         return;
 
-      // Direct pixel drawing - no intermediate variables
+      // Direct pixel drawing using library's native RGB888 method
       this->dma_display_->drawPixelRGB888(x, y, color.r, color.g, color.b);
     }
 
     void HUB75Display::fill(Color color) {
-      // Wrap fill screen method
-      dma_display_->fillScreenRGB888(color.r, color.g, color.b);
+      // Safety check - ensure display is initialized
+      if (!this->dma_display_) {
+        return;
+      }
+      
+      // Use library's native fillScreenRGB888 method for optimal performance
+      this->dma_display_->fillScreenRGB888(color.r, color.g, color.b);
     }
 
     void HUB75Display::filled_rectangle(int x1, int y1, int width, int height, Color color) {
-      // Wrap fill rectangle method
-      dma_display_->fillRect(x1, y1, width, height, color.r, color.g, color.b);
+      // Safety check - ensure display is initialized
+      if (!this->dma_display_) {
+        return;
+      }
+      
+      // Use library's native fillRect method for optimal performance
+      this->dma_display_->fillRect(x1, y1, width, height, color.r, color.g, color.b);
     }
 
     void HUB75Display::update_() { 

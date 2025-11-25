@@ -26,44 +26,63 @@ namespace esphome {
       HUB75Display::update();
 
       if (this->enabled_) {
-        // With double buffering: flip first to get back buffer, clear it, draw, then flip to show
-        // This ensures clearing happens on the non-visible buffer
+        // Proper double buffering pattern:
+        // The library maintains two buffers - one displayed, one for drawing
+        // When double buffering is enabled, we draw to the back buffer (non-visible),
+        // then flip to show it. This eliminates flicker and provides smooth updates.
+        
         if (this->double_buffer_enabled_) {
-          // Flip to get the back buffer (the one we'll draw to)
-          this->dma_display_->flipDMABuffer();
-          
-          // Clear the back buffer if auto_clear is enabled (not visible, so no lag)
+          // With double buffering: 
+          // 1. Clear the back buffer (current drawing target) if auto_clear is enabled
+          //    This happens on the non-visible buffer, so no flicker
           if (this->auto_clear_enabled_) {
             this->dma_display_->fillScreenRGB888(0, 0, 0);
           }
-        } else if (this->auto_clear_enabled_) {
-          // Single buffer mode: clear the visible buffer (will cause visible lag)
-          this->clear();
-        }
-
-        if (this->page_ != nullptr) {
-          this->page_->get_writer()(*this);
-        } else if (this->writer_.has_value()) {
-          (*this->writer_)(*this);
-        }
-        else {
-          update_();
-        }
-        
-        // Flip to show the newly drawn frame (only if double buffering is enabled)
-        if (this->double_buffer_enabled_) {
+          
+          // 2. Draw content to the back buffer
+          if (this->page_ != nullptr) {
+            this->page_->get_writer()(*this);
+          } else if (this->writer_.has_value()) {
+            (*this->writer_)(*this);
+          } else {
+            update_();
+          }
+          
+          // 3. Flip to swap buffers: back buffer becomes front (displayed), 
+          //    front buffer becomes back (next drawing target)
           this->dma_display_->flipDMABuffer();
+        } else {
+          // Single buffer mode: clear visible buffer first (will cause visible lag)
+          if (this->auto_clear_enabled_) {
+            this->clear();
+          }
+          
+          // Draw directly to the visible buffer
+          if (this->page_ != nullptr) {
+            this->page_->get_writer()(*this);
+          } else if (this->writer_.has_value()) {
+            (*this->writer_)(*this);
+          } else {
+            update_();
+          }
         }
       }
       else {
-        this->dma_display_->clearScreen();
+        // Display is disabled - clear both buffers if double buffering
+        if (this->double_buffer_enabled_) {
+          this->dma_display_->fillScreenRGB888(0, 0, 0);
+          this->dma_display_->flipDMABuffer();
+          this->dma_display_->fillScreenRGB888(0, 0, 0);
+          this->dma_display_->flipDMABuffer();
+        } else {
+          this->dma_display_->clearScreen();
+        }
       }
 
-      // remove all not ended clipping regions
+      // Remove all not ended clipping regions
       while (is_clipping()) {
         end_clipping();
       }
-
     }
 
     void HUB75DefaultDisplay::update_() { 
