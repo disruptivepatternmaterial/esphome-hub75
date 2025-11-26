@@ -87,12 +87,9 @@ namespace esphome {
         }
       }
 
-      // Remove all not ended clipping regions - only if clipping is active
-      // This avoids unnecessary function calls when clipping isn't used
-      if (is_clipping()) {
-        while (is_clipping()) {
-          end_clipping();
-        }
+      // Remove all not ended clipping regions
+      while (is_clipping()) {
+        end_clipping();
       }
     }
 
