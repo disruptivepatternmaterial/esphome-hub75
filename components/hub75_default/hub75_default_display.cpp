@@ -37,14 +37,15 @@ namespace esphome {
         // then flip to show it. This eliminates flicker and provides smooth updates.
         
         if (this->double_buffer_enabled_) {
-          // Double buffering: We're always drawing to the back buffer (non-visible)
-          // Clear the back buffer FIRST if auto_clear is enabled
-          // This must happen before drawing to ensure clean slate
+          // With double buffering: 
+          // 1. Clear the back buffer (current drawing target) if auto_clear is enabled
+          //    Use clearScreen() which is optimized by the library for better performance
+          //    This happens on the non-visible buffer, so no flicker
           if (this->auto_clear_enabled_) {
             this->dma_display_->clearScreen();
           }
           
-          // Draw content to the back buffer
+          // 2. Draw content to the back buffer
           if (this->page_ != nullptr) {
             this->page_->get_writer()(*this);
           } else if (this->writer_.has_value()) {
@@ -53,13 +54,10 @@ namespace esphome {
             update_();
           }
           
-          // Flip to show the newly drawn frame
-          // This atomically swaps buffers: back becomes front (displayed), front becomes back
+          // 3. Flip to swap buffers: back buffer becomes front (displayed), 
+          //    front buffer becomes back (next drawing target)
+          //    This is atomic and prevents tearing
           this->dma_display_->flipDMABuffer();
-          
-          // 4. Small yield to ensure DMA transfer completes and frame is displayed
-          // This prevents buffer conflicts and ensures smooth operation
-          yield();
         } else {
           // Single buffer mode: clear visible buffer first (will cause visible lag)
           if (this->auto_clear_enabled_) {

@@ -110,15 +110,7 @@ namespace esphome
         mxconfig.clkphase = this->clock_phase_;
 
       // The min refresh rate correlates with the update frequency of the component
-      // Cap at reasonable maximum (most displays can't handle > 200-300 Hz effectively)
-      // Higher rates can cause buffer synchronization issues
-      uint16_t calculated_rate = 1000 / this->update_interval_;
-      mxconfig.min_refresh_rate = (calculated_rate > 300) ? 300 : calculated_rate;
-      
-      if (calculated_rate > 300) {
-        ESP_LOGW(TAG, "Update interval %dms results in %d Hz - capping at 300 Hz for stability", 
-                 this->update_interval_, calculated_rate);
-      }
+      mxconfig.min_refresh_rate = 1000 / this->update_interval_;
 
       // Configure double buffering - when enabled, library maintains two buffers
       // for smooth, flicker-free updates
