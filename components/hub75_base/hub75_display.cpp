@@ -109,27 +109,8 @@ namespace esphome
       if (this->user_defined_clock_phase_)
         mxconfig.clkphase = this->clock_phase_;
 
-      // min_refresh_rate controls the hardware DMA refresh rate (independent of update_interval)
-      // This should be high enough (200-300 Hz) for smooth, flicker-free display
-      // update_interval controls how often we redraw content, which can be much slower
-      // For a clock that changes once per second, update_interval can be 1000ms, but
-      // min_refresh_rate should still be 200-300 Hz for smooth hardware refresh
-      uint16_t calculated_rate = 1000 / this->update_interval_;
-      // Set a reasonable minimum - hardware needs at least 100 Hz for smooth display
-      // Cap at 300 Hz maximum to prevent excessive CPU usage
-      if (calculated_rate < 200) {
-        // If update_interval is slow (like 5000ms for a clock), use a fixed high refresh rate
-        // The library's DMA will refresh the display smoothly regardless of our update frequency
-        mxconfig.min_refresh_rate = 200; // 200 Hz is good for smooth display
-        ESP_LOGCONFIG(TAG, "  Using fixed min_refresh_rate: 200 Hz (update_interval %dms is too slow for direct calculation)", 
-                     this->update_interval_);
-      } else {
-        // For fast update intervals, use calculated rate but cap at 300 Hz
-        mxconfig.min_refresh_rate = (calculated_rate > 300) ? 300 : calculated_rate;
-        if (calculated_rate > 300) {
-          ESP_LOGCONFIG(TAG, "  Capping min_refresh_rate at 300 Hz (calculated: %d Hz)", calculated_rate);
-        }
-      }
+      // The min refresh rate correlates with the update frequency of the component
+      mxconfig.min_refresh_rate = 1000 / this->update_interval_;
 
       // Configure double buffering - when enabled, library maintains two buffers
       // for smooth, flicker-free updates
