@@ -122,8 +122,8 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
     void set_max_brightness(uint8_t max_brightness) { this->max_brightness_ = max_brightness; }
     MatrixPanel_I2S_DMA* get_display() { return this->dma_display_; }
 
-    void set_time(time::RealTimeClock *time);
-    time::RealTimeClock* get_time() { return this->time_; };
+    void set_time(esphome::time::RealTimeClock *time);
+    esphome::time::RealTimeClock* get_time() { return this->time_; };
 
     // Home Assistant Service Call Definition
     void on_set_brightness(int brightness);
@@ -181,7 +181,7 @@ class HUB75Display : public PollingComponent, public display::DisplayBuffer {
 
     uint8_t get_brightness() { return brightness_; };
 
-    time::RealTimeClock *time_;
+    esphome::time::RealTimeClock *time_;
 
     uint16_t frameCounter_ = 0;
     uint32_t frameTime_ = millis();
