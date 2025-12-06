@@ -7,6 +7,7 @@ using namespace esphome;
 #include "esphome/core/component.h"
 #include "esphome/core/version.h"
 #include "esphome/components/display/display_buffer.h"
+#include "esphome/components/time/real_time_clock.h"
 
 // The esphome ESP_LOGx macros expand to reference esp_log_printf_, but do so
 // without using its namespace. https://github.com/esphome/issues/issues/3196
