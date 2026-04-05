@@ -37,9 +37,11 @@ namespace esphome
           case HUB75_I2S_CFG::shift_driver::FM6124:
             base_blanking = 1;
             break;
+#if defined(MBI5124)
           case HUB75_I2S_CFG::shift_driver::MBI5124:
             base_blanking = 2;
             break;
+#endif
           default:
             base_blanking = 1;
             break;
@@ -109,8 +111,8 @@ namespace esphome
       if (this->user_defined_clock_phase_)
         mxconfig.clkphase = this->clock_phase_;
 
-      // The min refresh rate correlates with the update frequency of the component
-      mxconfig.min_refresh_rate = 1000 / this->update_interval_;
+      uint16_t calculated_rate = 1000 / this->update_interval_;
+      mxconfig.min_refresh_rate = (calculated_rate < MIN_REFRESH_RATE) ? MIN_REFRESH_RATE : calculated_rate;
 
       // Configure double buffering - when enabled, library maintains two buffers
       // for smooth, flicker-free updates
@@ -193,9 +195,11 @@ namespace esphome
       case HUB75_I2S_CFG::shift_driver::ICN2038S:
         ESP_LOGCONFIG(TAG, "  Driver: ICN2038S/ICN2037BP (compatible chipsets)");
         break;
+#if defined(MBI5124)
       case HUB75_I2S_CFG::shift_driver::MBI5124:
         ESP_LOGCONFIG(TAG, "  Driver: MBI5124");
         break;
+#endif
       case HUB75_I2S_CFG::shift_driver::DP3246:
         ESP_LOGCONFIG(TAG, "  Driver: DP3246");
         break;
@@ -231,7 +235,9 @@ namespace esphome
         case HUB75_I2S_CFG::shift_driver::FM6124: return "FM6124/FM6047";  // FM6047 uses FM6124 initialization
         case HUB75_I2S_CFG::shift_driver::FM6126A: return "FM6126A";
         case HUB75_I2S_CFG::shift_driver::ICN2038S: return "ICN2038S/ICN2037BP";  // ICN2037BP uses ICN2038S initialization
+#if defined(MBI5124)
         case HUB75_I2S_CFG::shift_driver::MBI5124: return "MBI5124";
+#endif
         case HUB75_I2S_CFG::shift_driver::DP3246: return "DP3246";
         default: return "Unknown";
       }
@@ -451,11 +457,9 @@ namespace esphome
     }
 
     void HUB75Display::update_brightness_(unsigned long timeInMillis) {
-      // Optimized brightness update - only process when needed
       static unsigned long last_brightness_update = 0;
       static bool brightness_changing = false;
       
-      // Only update brightness if it's changing and enough time has passed
       if (brightness_ != brightness_destination_) {
         if (!brightness_changing) {
           brightness_changing = true;
@@ -463,20 +467,21 @@ namespace esphome
         }
         
         if (timeInMillis - last_brightness_update >= brightness_fade_speed_) {
-          // Optimized brightness calculation
-          int8_t brightness_diff = brightness_destination_ - brightness_;
-          int8_t step = (brightness_diff > 0) ? BRIGHTNESS_STEP : -BRIGHTNESS_STEP;
+          int16_t brightness_diff = (int16_t)brightness_destination_ - (int16_t)brightness_;
+          int16_t step = (brightness_diff > 0) ? BRIGHTNESS_STEP : -BRIGHTNESS_STEP;
           
-          brightness_ += step;
+          int16_t next = (int16_t)brightness_ + step;
           
-          // Clamp to destination
-          if ((step > 0 && brightness_ >= brightness_destination_) ||
-              (step < 0 && brightness_ <= brightness_destination_)) {
+          if ((step > 0 && next >= (int16_t)brightness_destination_) ||
+              (step < 0 && next <= (int16_t)brightness_destination_)) {
             brightness_ = brightness_destination_;
             brightness_changing = false;
+          } else {
+            brightness_ = (uint8_t)next;
           }
           
-          this->set_brightness(brightness_);
+          if (this->dma_display_)
+            this->dma_display_->setBrightness8(brightness_);
           last_brightness_update = timeInMillis;
         }
       } else {
